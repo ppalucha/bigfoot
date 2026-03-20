@@ -1,6 +1,29 @@
 # bigfoot
 
+[![CI](https://github.com/ppalucha/bigfoot/actions/workflows/ci.yml/badge.svg)](https://github.com/ppalucha/bigfoot/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ppalucha/bigfoot)](https://github.com/ppalucha/bigfoot/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ppalucha/bigfoot)](https://goreportcard.com/report/github.com/ppalucha/bigfoot)
+[![License](https://img.shields.io/github/license/ppalucha/bigfoot)](LICENSE)
+
 Interactive disk usage analyzer for macOS and Linux. Finds what's eating your storage, fast.
+
+> Vibecoded with [Claude Code](https://claude.com/claude-code).
+
+```
+  234.5 GB  /home/alice
+──────────────────────────────────────────────────────────────────────────────
+▶   187.2 GB ████████████████░░░░  79.8%  projects/
+    ▼   142.0 GB ████████████░░░░░░░░  60.5%  work/
+        ▶    98.3 GB ████████░░░░░░░░░░░░  41.9%  datasets/
+        ▶    31.4 GB ███░░░░░░░░░░░░░░░░░░  13.4%  builds/
+        ▶    12.3 GB █░░░░░░░░░░░░░░░░░░░░   5.2%  src/
+    ▶    45.2 GB ████░░░░░░░░░░░░░░░░  19.3%  personal/
+     26.8 GB ██░░░░░░░░░░░░░░░░░░  11.4%  Downloads/
+     14.1 GB █░░░░░░░░░░░░░░░░░░░   6.0%  Virtual Machines/
+      6.4 GB ░░░░░░░░░░░░░░░░░░░░   2.7%  Library/
+──────────────────────────────────────────────────────────────────────────────
+↑↓/jk move  →←/Enter expand/collapse  g/G top/end  q quit          4/9
+```
 
 ## Features
 
