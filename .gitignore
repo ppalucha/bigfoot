@@ -1,0 +1,13 @@
+# compiled binary
+bigfoot
+
+# goreleaser output
+dist/
+
+# macOS
+.DS_Store
+
+# editor
+.idea/
+.vscode/
+*.swp
