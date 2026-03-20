@@ -1,0 +1,148 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dustin/go-humanize"
+	"github.com/mattn/go-isatty"
+	"github.com/ppalucha/bigfoot/scanner"
+	"github.com/ppalucha/bigfoot/ui"
+)
+
+// startProgress prints a spinner + dir count to stderr every 100ms until the
+// returned stop function is called. No-op when stderr is not a TTY.
+func startProgress(path string, walker *scanner.Walker) (stop func()) {
+	if !isatty.IsTerminal(os.Stderr.Fd()) {
+		return func() {}
+	}
+	done := make(chan struct{})
+	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	go func() {
+		i := 0
+		for {
+			select {
+			case <-done:
+				fmt.Fprintf(os.Stderr, "\r\033[K") // clear line
+				return
+			case <-time.After(100 * time.Millisecond):
+				n := walker.DirsScanned.Load()
+				fmt.Fprintf(os.Stderr, "\r%s  %s  %s dirs scanned",
+					frames[i%len(frames)],
+					path,
+					humanize.Comma(n),
+				)
+				i++
+			}
+		}
+	}()
+	return func() { close(done) }
+}
+
+func launchUI(entry *scanner.Entry, depth, topN int) {
+	if isatty.IsTerminal(os.Stdout.Fd()) {
+		m := ui.NewTUIModel(entry)
+		p := tea.NewProgram(m, tea.WithAltScreen())
+		if _, err := p.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "error running TUI: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		ui.PrintTree(entry, 0, depth, topN)
+	}
+}
+
+func main() {
+	var (
+		depth       = flag.Int("depth", 3, "tree depth to display")
+		topN        = flag.Int("top", 10, "top N entries per level")
+		noCache     = flag.Bool("no-cache", false, "ignore cache and rescan")
+		cacheOnly   = flag.Bool("cache-only", false, "display last saved scan without rescanning")
+		verbose     = flag.Bool("verbose", false, "print skipped paths (permission errors etc.)")
+		crossDevice = flag.Bool("cross-device", false, "follow mount points into other filesystems (default: stay on one device, like du -x)")
+	)
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: bigfoot [flags] [path]\n\nFlags:\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	root := "."
+	if flag.NArg() > 0 {
+		root = flag.Arg(0)
+	}
+
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *cacheOnly {
+		// Don't load the leaf cache — only need the full scan snapshot.
+		c := scanner.NewFreshCache()
+		entry, ok := c.LoadFullScan(abs)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "error: no saved scan found for %s — run without --cache-only first\n", abs)
+			os.Exit(1)
+		}
+		launchUI(entry, *depth, *topN)
+		return
+	}
+
+	cache := scanner.NewCache()
+
+	if *noCache {
+		cache = scanner.NewFreshCache()
+	}
+
+	// timing helper: only prints when --verbose
+	elapsed := func(label string, start time.Time) {
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "timing: %s took %s\n", label, time.Since(start).Round(time.Millisecond))
+		}
+	}
+
+	walker := scanner.NewWalker(cache)
+	walker.CrossDevice = *crossDevice
+	if *verbose {
+		walker.OnSkipped = func(path string, err error) {
+			fmt.Fprintf(os.Stderr, "skipped: %s (%v)\n", path, err)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "Scanning %s...\n", abs)
+	stopProgress := startProgress(abs, walker)
+	t := time.Now()
+	entry, err := walker.Walk(abs)
+	stopProgress()
+	elapsed("scan", t)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	t = time.Now()
+	if err := cache.Save(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not save cache: %v\n", err)
+	}
+	elapsed("cache save", t)
+
+	t = time.Now()
+	if err := cache.SaveFullScan(abs, entry); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not save full scan: %v\n", err)
+	}
+	elapsed("full scan save", t)
+
+	if n := walker.SkippedCount.Load(); n > 0 {
+		fmt.Fprintf(os.Stderr, "warning: %d path(s) skipped due to permission errors (run with --verbose to list them)\n", n)
+	}
+
+	t = time.Now()
+	launchUI(entry, *depth, *topN)
+	elapsed("render", t)
+}
