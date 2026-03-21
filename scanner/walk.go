@@ -22,6 +22,11 @@ type Entry struct {
 const maxRecursionDepth = 100
 const maxGoroutines = 2048
 
+type inodeKey struct {
+	dev uint64
+	ino uint64
+}
+
 type Walker struct {
 	cache          *Cache
 	IgnoreDirs     map[string]bool
@@ -30,8 +35,9 @@ type Walker struct {
 	OnSkipped      func(path string, err error)
 	SkippedCount   atomic.Int64
 	DirsScanned    atomic.Int64
-	CrossDevice    bool   // if true, follow mount points into other filesystems
-	rootDev        uint64 // device ID of the root path being scanned
+	CrossDevice    bool      // if true, follow mount points into other filesystems
+	rootDev        uint64    // device ID of the root path being scanned
+	visited        sync.Map  // tracks visited (dev, ino) pairs to avoid double-counting firmlinks
 }
 
 func NewWalker(cache *Cache) *Walker {
@@ -81,15 +87,23 @@ func (w *Walker) walkDir(path string, depth int) (*Entry, error) {
 	}
 
 	// Skip directories on a different filesystem unless --cross-device is set.
-	// Also skip APFS firmlinks (e.g. /Users → /System/Volumes/Data/Users): they
-	// share the same Dev as the root container so the device check alone misses
-	// them, causing double-counting. depth==0 is exempt so that scanning a path
-	// that is itself a firmlink (e.g. bigfoot /Users) still works.
 	if !w.CrossDevice && w.rootDev != 0 {
 		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-			if uint64(stat.Dev) != w.rootDev || (depth > 0 && isFirmlink(stat)) {
+			if uint64(stat.Dev) != w.rootDev {
 				return &Entry{Path: path, Size: 0, IsDir: true}, nil
 			}
+		}
+	}
+
+	// Deduplicate by inode. On macOS APFS, all volumes in a container share the
+	// same Dev, so the device check above cannot detect firmlinks. /Users and
+	// /System/Volumes/Data/Users expose the same inode via two paths and would
+	// both be counted. Track visited (dev, ino) pairs and skip any directory
+	// we've already entered.
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		key := inodeKey{dev: uint64(stat.Dev), ino: uint64(stat.Ino)}
+		if _, seen := w.visited.LoadOrStore(key, struct{}{}); seen {
+			return &Entry{Path: path, Size: 0, IsDir: true}, nil
 		}
 	}
 
