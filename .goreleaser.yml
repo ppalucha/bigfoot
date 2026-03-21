@@ -27,6 +27,20 @@ sboms:
     documents:
       - "{{ .ArtifactName }}.sbom.json"
 
+brews:
+  - name: bigfoot
+    repository:
+      owner: ppalucha
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/ppalucha/bigfoot"
+    description: "Interactive disk usage analyzer for macOS and Linux."
+    license: "Apache-2.0"
+    install: |
+      bin.install "bigfoot"
+    test: |
+      system "#{bin}/bigfoot", "--version"
+
 changelog:
   sort: asc
   filters:
