@@ -2,7 +2,9 @@
 
 [![CI](https://github.com/ppalucha/bigfoot/actions/workflows/ci.yml/badge.svg)](https://github.com/ppalucha/bigfoot/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ppalucha/bigfoot)](https://github.com/ppalucha/bigfoot/releases/latest)
+[![Go version](https://img.shields.io/github/go-mod/go-version/ppalucha/bigfoot)](go.mod)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ppalucha/bigfoot)](https://goreportcard.com/report/github.com/ppalucha/bigfoot)
+[![CodeQL](https://github.com/ppalucha/bigfoot/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/ppalucha/bigfoot/actions/workflows/github-code-scanning/codeql)
 [![License](https://img.shields.io/github/license/ppalucha/bigfoot)](LICENSE)
 
 Interactive disk usage analyzer for macOS and Linux. Finds what's eating your storage, fast.
@@ -35,6 +37,13 @@ Interactive disk usage analyzer for macOS and Linux. Finds what's eating your st
 - **Safe with sudo** — read-only operations only; never writes to the scanned path
 
 ## Install
+
+**Homebrew (macOS/Linux):**
+
+```sh
+brew tap ppalucha/tap
+brew install bigfoot
+```
 
 **Download binary:**
 
