@@ -81,9 +81,13 @@ func (w *Walker) walkDir(path string, depth int) (*Entry, error) {
 	}
 
 	// Skip directories on a different filesystem unless --cross-device is set.
+	// Also skip APFS firmlinks (e.g. /Users → /System/Volumes/Data/Users): they
+	// share the same Dev as the root container so the device check alone misses
+	// them, causing double-counting. depth==0 is exempt so that scanning a path
+	// that is itself a firmlink (e.g. bigfoot /Users) still works.
 	if !w.CrossDevice && w.rootDev != 0 {
 		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-			if uint64(stat.Dev) != w.rootDev {
+			if uint64(stat.Dev) != w.rootDev || (depth > 0 && isFirmlink(stat)) {
 				return &Entry{Path: path, Size: 0, IsDir: true}, nil
 			}
 		}
