@@ -112,7 +112,21 @@ bigfoot --depth 5 ~ | less -R
 | `G` | Jump to bottom |
 | `Space` / `PgDn` | Page down |
 | `PgUp` | Page up |
+| `d` | Mark / unmark for deletion |
 | `q` / `Ctrl+C` | Quit |
+
+## Marking files for deletion
+
+Press `d` to mark or unmark any file or directory. Marked items are highlighted in red with a `✗` prefix. The status bar shows the total count and size of marked items.
+
+When you quit, if anything is marked, bigfoot writes a shell script to `~/.cache/bigfoot/remove.sh` and prints its path:
+
+```sh
+Marked paths saved to: /home/alice/.cache/bigfoot/remove.sh
+Review and run:  sh /home/alice/.cache/bigfoot/remove.sh
+```
+
+The script uses `rm -rf` — **review it before running**. bigfoot itself never deletes anything.
 
 ## How caching works
 

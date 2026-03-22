@@ -11,11 +11,12 @@ import (
 )
 
 var (
-	cursorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
-	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
-	sepStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("237"))
-	selectedDir = lipgloss.NewStyle().Foreground(lipgloss.Color("75")).Bold(true).Underline(true)
-	selectedFil = lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Bold(true)
+	cursorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
+	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
+	sepStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("237"))
+	selectedDir  = lipgloss.NewStyle().Foreground(lipgloss.Color("75")).Bold(true).Underline(true)
+	selectedFil  = lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Bold(true)
+	markedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
 )
 
 type treeNode struct {
@@ -32,6 +33,7 @@ type TUIModel struct {
 	offset    int
 	height    int
 	width     int
+	marked    map[string]bool
 }
 
 func NewTUIModel(root *scanner.Entry) TUIModel {
@@ -40,11 +42,21 @@ func NewTUIModel(root *scanner.Entry) TUIModel {
 		totalSize: root.Size,
 		height:    24,
 		width:     80,
+		marked:    make(map[string]bool),
 	}
 	for _, child := range root.Children {
 		m.nodes = append(m.nodes, &treeNode{entry: child, depth: 0})
 	}
 	return m
+}
+
+// MarkedPaths returns the paths the user marked for deletion.
+func (m TUIModel) MarkedPaths() []string {
+	paths := make([]string, 0, len(m.marked))
+	for p := range m.marked {
+		paths = append(paths, p)
+	}
+	return paths
 }
 
 func (m TUIModel) Init() tea.Cmd { return nil }
@@ -90,6 +102,15 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "pgup":
 			m.cursor = max(m.cursor-m.viewHeight(), 0)
 			m.ensureVisible()
+		case "d":
+			if m.cursor < len(m.nodes) {
+				path := m.nodes[m.cursor].entry.Path
+				if m.marked[path] {
+					delete(m.marked, path)
+				} else {
+					m.marked[path] = true
+				}
+			}
 		}
 	}
 	return m, nil
@@ -196,8 +217,17 @@ func (m TUIModel) View() string {
 	// Footer
 	b.WriteString(sepStyle.Render(strings.Repeat("─", m.width)) + "\n")
 	position := fmt.Sprintf("%d/%d", m.cursor+1, len(m.nodes))
-	help := "↑↓/jk move  →←/Enter expand/collapse  g/G top/end  q quit"
+	help := "↑↓/jk move  →←/Enter expand/collapse  g/G top/end  d mark  q quit"
 	b.WriteString(dimStyle.Render(help + "  " + position))
+	if len(m.marked) > 0 {
+		var markedSize int64
+		for _, n := range m.nodes {
+			if m.marked[n.entry.Path] {
+				markedSize += n.entry.Size
+			}
+		}
+		b.WriteString("  " + markedStyle.Render(fmt.Sprintf("✗ %d marked (%s)", len(m.marked), humanize.Bytes(uint64(markedSize)))))
+	}
 
 	return b.String()
 }
@@ -232,8 +262,16 @@ func (m TUIModel) renderRow(node *treeNode, selected bool) string {
 		name = name[idx+1:]
 	}
 
+	marked := m.marked[node.entry.Path]
+
 	var nameStr string
-	if node.entry.IsDir {
+	if marked {
+		suffix := ""
+		if node.entry.IsDir {
+			suffix = "/"
+		}
+		nameStr = markedStyle.Render("✗ "+name+suffix)
+	} else if node.entry.IsDir {
 		if selected {
 			nameStr = selectedDir.Render(name) + "/"
 		} else {
